@@ -27,6 +27,9 @@ build/Release
 node_modules
 
 # local db settings
-.loopbackrc
+/.loopbackrc
 
 .idea
+
+# lib folder
+lib

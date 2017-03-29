@@ -10,7 +10,7 @@ _ = require 'underscore'
 Connector = require('loopback-connector').Connector
 GeoPoint = require('loopback-datasource-juggler').GeoPoint
 debug = require('debug') 'loopback:connector:arango'
-
+chalk = require('chalk');
 
 exports.generateConnObject = generateConnObject = (settings) ->
   u = {}
@@ -73,9 +73,9 @@ class ArangoDBConnector extends Connector
     The constructor for ArangoDB connector
     @constructor
     @param dataSource [Object] Object to connect this connector to a data source
-    @option settings host [String] The host/ip address to connect with
+    @option settings host [String] The host/ ip address to connect with
     @option settings port [Number] The port to connect with
-    @option settings database/db [String] The database to connect with
+    @option settings database/ db [String] The database to connect with
     @option settings headers [Object] Object with header to include in every request
     @param dataSource [DataSource] The data source instance
   ###
@@ -159,9 +159,8 @@ class ArangoDBConnector extends Connector
   ###
   _fullIdName: (model) ->
     props = @getModelClass(model).properties
-    for key, prop of props
-      _id = prop._id
-      if !_id then continue
+    for key of props
+      if key != '_id' then continue
       return key
     return false
 
@@ -172,10 +171,8 @@ class ArangoDBConnector extends Connector
   ###
   _fromName: (model) ->
     props = @getModelClass(model).properties
-    for key, prop of props
-      _from = prop._from
-      if !_from then continue
-      return key
+    if props['_from']
+      return '_from'
     return false
 
   ###
@@ -185,10 +182,8 @@ class ArangoDBConnector extends Connector
   ###
   _toName: (model) ->
     props = @getModelClass(model).properties
-    for key, prop of props
-      _to = prop._to
-      if !_to then continue
-      return key
+    if props['_to']
+      return '_to'
     return false
 
   ###
@@ -203,6 +198,34 @@ class ArangoDBConnector extends Connector
     collection = ArangoDBConnector.collection
     if @_isEdge model then collection = ArangoDBConnector.edgeCollection
     return @db[collection] @getCollectionName model
+
+  ###
+    Access a ArangoDB graph by name
+    @param {String} name The graph name
+    @param callback [Function] The callback function
+    @return {*}
+  ###
+  getGraph: (name, cb) ->
+    if not @db then throw new Error('ArangoDB connection is not established')
+
+    graphString = ArangoDBConnector.graph
+    graph = @db[graphString] name
+    graph.get cb
+
+  ###
+    Access a ArangoDB graph by name
+    @param {String} name The graph name
+    @param {String} settings The graph settings
+    @param callback [Function] The callback function
+    @return {*}
+  ###
+  createGraph: (name, settings, cb) ->
+    if not @db then throw new Error('ArangoDB connection is not established')
+
+    graphString = ArangoDBConnector.graph
+    graph = @db[graphString] name
+    graph.create settings, cb
+
 
   ###
     Converts the retrieved data from the database to JSON, based on the properties of a given model
@@ -284,11 +307,10 @@ class ArangoDBConnector extends Connector
     Create a new model instance for the given data
     @param model [String] The model name
     @param data [Object] The data to create
-    @param callback [Function] The callback function, called with a (possible) error object and the created object's id
+    @param callback [Function] The callback function, called with a (possible) error object and the created objects id
   ###
   create: (model, data, options, callback) ->
     debug "create model #{model} with data: #{JSON.stringify data}" if @debug
-
     idValue = @getIdValue model, data
     idName = @idName model
     if !idValue? or typeof idValue is 'undefined'
@@ -300,6 +322,7 @@ class ArangoDBConnector extends Connector
 
     # Check and delete full id name if present
     fullIdName = @_fullIdName model
+
     if fullIdName then delete data[fullIdName]
 
     isEdge = @_isEdge model
@@ -336,7 +359,10 @@ class ArangoDBConnector extends Connector
 
       if fullIdName
         data[fullIdName] = fullIdValue
-      callback err, idValue
+
+      data['verified'] = true
+
+      callback err, idValue, null, { data: data}
 
   ###
     Update if the model instance exists with the same id or create a new instance
@@ -346,12 +372,13 @@ class ArangoDBConnector extends Connector
   ###
   updateOrCreate: (model, data, options, callback) ->
     debug "updateOrCreate for Model #{model} with data: #{JSON.stringify data}" if @debug
-
-    @getVersion (err, v) ->
-      version = new RegExp(/[2-9]+\.[6-9]+\.[0-9]+/).test(v.version)
-      if err or !version
-        err = new Error "Error updateOrCreate not supported for version {#v}"
-        callback err
+    ###
+      @getVersion (err, v) ->
+        version = new RegExp(/[2-9]+\.[6-9]+\.[0-9]+/).test(v.version)
+        if err or !version
+          err = new Error "Error updateOrCreate not supported for version {#v}"
+          callback err
+    ###
 
     idValue = @getIdValue(model, data)
     idName = @idName(model)
@@ -390,8 +417,9 @@ class ArangoDBConnector extends Connector
         if fullIdName
           data[fullIdName] = newDoc._id
           if fullIdName isnt '_id' then delete newDoc._id
-        else
-          delete newDoc._id
+          # We don't want to delete _id, do we? No, because we need it to create edges!
+          # else
+          #   delete newDoc._id
         if isEdge
           data[fromName] = result._from if fromName isnt '_from'
           data[toName] = result._to if toName isnt '_to'
@@ -781,7 +809,7 @@ class ArangoDBConnector extends Connector
     Update matching instance
     @param [String] model The model name
     @param [Object] where The search criteria
-    @param [Object] data The property/value pairs to be updated
+    @param [Object] data The property/ value pairs to be updated
     @param [Object] options
     @param [Function] callback Callback with (possible) error object or the number of affected objects
   ###
@@ -896,35 +924,55 @@ class ArangoDBConnector extends Connector
   ###
   automigrate: (models, cb) ->
     if @db
-      debug "automigrate for model #{models}" if @debug
-      if (not cb) and (typeof models is 'function')
-        cb = models
-        models = undefined
-      # First argument is a model name
-      models = [models] if typeof models is 'string'
-      models = models || Object.keys @_models
+      debug 'automigrate: check if db exists'
+      @db.get (err, db) =>
+        if (db)
+          debug 'db exists. migrating models'
 
-      async.eachSeries(models, ((model, modelCallback) =>
-        collectionName = @getCollectionName model
-        debug 'drop collection %s for model %s', collectionName, model
-        collection = @getCollection model
-        collection.drop (err) =>
-          if err
-            if err.response.body?
-              err = err.response.body
-              #  For errors other than 'ns not found' (collection doesn't exist)
-              return modelCallback err if not (err.error is true and err.errorNum is 1203 and err.errorMessage is 'unknown collection \'' + model + '\'')
-          # Recreate the collection
-          debug 'create collection %s for model %s', collectionName, model
-          collection.create modelCallback
-      ), ((err) =>
-        return cb and cb err
-        @autoupdate models, cb
-      ))
+          @db.useDatabase(@settings.databaseName)
+          @automigrateModels(models, cb)
+        else
+          debug 'db not found. creating db with name ' + @settings.databaseName
+
+          @db.useDatabase('_system').createDatabase(@settings.databaseName, (err, dbCreated) =>
+            if err or not dbCreated then return cb err
+
+            @db.useDatabase(@settings.databaseName)
+            @automigrateModels(models, cb)
+          )
+
     else
       @dataSource.once 'connected', () -> @automigrate models cb
 
+  automigrateModels: (models, cb) ->
+    debug "automigrate for model #{models}" if @debug
+    if (not cb) and (typeof models is 'function')
+      cb = models
+      models = undefined
+    # First argument is a model name
+    models = [models] if typeof models is 'string'
+    models = models || Object.keys @_models
+
+    async.eachSeries(models, ((model, modelCallback) =>
+      collectionName = @getCollectionName model
+      debug 'drop collection %s for model %s', collectionName, model
+      collection = @getCollection model
+      collection.drop (err) =>
+        if err
+          if err.response.body?
+            err = err.response.body
+            #  For errors other than 'ns not found' (collection doesn't exist)
+            return modelCallback err if not (err.error is true and err.errorNum is 1203 and err.errorMessage is 'unknown collection \'' + collectionName + '\'')
+        # Recreate the collection
+        debug 'create collection %s for model %s', collectionName, model
+        collection.create modelCallback
+    ), ((err) =>
+      return cb and cb err
+      @autoupdate models, cb
+    ))
+
 ArangoDBConnector.collection = 'collection'
 ArangoDBConnector.edgeCollection = 'edgeCollection'
+ArangoDBConnector.graph = 'graph'
 
 exports.ArangoDBConnector = ArangoDBConnector

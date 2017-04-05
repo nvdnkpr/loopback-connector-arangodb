@@ -2,6 +2,8 @@ language: node_js
 
 node_js:
   - "0.12"
+  - "4"
+  - "6"
 
 before_install:
   - curl -s -L https://www.arangodb.com/repositories/travisCI/setup_arangodb_2.8.11.sh -o setup_arangodb.sh
@@ -13,4 +15,6 @@ install:
 
 script:
   - npm test
-  #- npm run build-test-debug
+
+after_script:
+  - ./test/travis/teardown_arangodb.sh

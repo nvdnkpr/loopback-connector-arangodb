@@ -11,11 +11,8 @@
     "Connector"
   ],
   "scripts": {
-    "build": "coffee --bare --compile --output lib/ src/*.coffee",
     "prepublish": "coffee --bare --compile --output lib/ src/*.coffee",
-    "test": "node_modules/.bin/mocha test/*.test.coffee -R spec -t 2000 --compilers coffee:coffee-script/register",
-    "build-test": "npm run build && npm test",
-    "build-test-debug": "npm run build && DEBUG=loopback:* npm test"
+    "test": "node_modules/.bin/mocha test/*.test.coffee -R spec -t 2000 --compilers coffee:coffee-script/register"
   },
   "dependencies": {
     "aqb": "^2.1.0",

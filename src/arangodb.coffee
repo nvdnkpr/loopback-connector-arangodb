@@ -32,10 +32,10 @@ exports.generateArangoDBURL = generateArangoDBURL = (settings) ->
   @private
 ###
 _fieldIncluded = (fields, fieldName) ->
-  if !fields then return true
+  if not fields then return true
 
   if Array.isArray fields
-    return fields.indexOf fieldName  >= 0
+    return fields.indexOf fieldName >= 0
 
   if fields[fieldName]
     # Included
@@ -108,12 +108,12 @@ class ArangoDBConnector extends Connector
     @param {Db} db The arangoDB object
   ###
   connect: (callback) ->
-    debug "ArangoDB connection called with settings: #{JSON.stringify @settings}" if @debug
+    debug "ArangoDB connection is called with settings: #{JSON.stringify @settings}" if @debug
     if not @db
       @db = arangojs @settings
       @api = @db.route '/_api'
     process.nextTick () ->
-      callback and callback null, @db
+      callback null, @db if callback
 
   ###
     Get the types of this connector
@@ -124,7 +124,7 @@ class ArangoDBConnector extends Connector
 
   ###
     The default Id type
-    @return {Object} The type of id value
+    @return {String} The type of id value
   ###
   getDefaultIdType: () ->
     return String
@@ -643,7 +643,7 @@ class ArangoDBConnector extends Connector
           aql = aql.sort(returnVariable + '.' + field, 'DESC')
         else
           aql = aql.sort(returnVariable + '.' + field, 'ASC')
-    else if !@settings.disableDefaultSortByKey
+    else if not @settings.disableDefaultSortByKey
       aql = aql.sort(returnVariable + '._key')
 
     if filter.limit
@@ -779,7 +779,7 @@ class ArangoDBConnector extends Connector
   updateAttributes: (model, id, data, options, callback) ->
     debug "updateAttributes for #{model} with id #{id} and data #{JSON.stringify data}" if @debug
 
-    id = String(id)
+    id = @getDefaultIdType() id
     idName = @idName(model)
     fullIdName = @_fullIdName model
     if fullIdName then delete data[fullIdName]

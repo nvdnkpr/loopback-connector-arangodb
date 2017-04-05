@@ -550,7 +550,18 @@ class ArangoDBConnector extends Connector
           # If the value is not an array, fall back to regular fields
           switch
             # number comparison
-            when condOp in ['lte', 'lt', 'gte', 'gt', 'eq', 'neq']
+            when condOp in ['lte', 'lt']
+              aqlArray.push qb[condOp] "#{returnVariable}.#{condProp}", "#{assignNewQueryVariable(condValue)}"
+              if condValue isnt null
+                aqlArray.push qb['neq'] "#{returnVariable}.#{condProp}", "#{assignNewQueryVariable(null)}"
+            when condOp in ['gte', 'gt']
+              if condValue is null
+                if condOp is 'gte' then condOp = 'lte'
+                if condOp is 'gt' then condOp = 'lt'
+                aqlArray.push qb[condOp] "#{returnVariable}.#{condProp}", "#{assignNewQueryVariable(null)}"
+              else
+                aqlArray.push qb[condOp] "#{returnVariable}.#{condProp}", "#{assignNewQueryVariable(condValue)}"
+            when condOp in ['eq', 'neq']
               aqlArray.push qb[condOp] "#{returnVariable}.#{condProp}", "#{assignNewQueryVariable(condValue)}"
             # range comparison
             when condOp is 'between'

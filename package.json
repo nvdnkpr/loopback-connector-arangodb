@@ -31,7 +31,7 @@
     "bluebird": "^2.9.14",
     "codo": "^2.0.11",
     "coffee-script": "^1.9.1",
-    "loopback-datasource-juggler": "https://github.com/mrbatista/loopback-datasource-juggler#backport/fix-test-forceId",
+    "loopback-datasource-juggler": "https://github.com/strongloop/loopback-datasource-juggler#2.x",
     "mocha": "^2.2.1",
     "rc": "^0.6.0",
     "semicov": "~0.1.1-1",
